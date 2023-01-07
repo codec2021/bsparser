@@ -1,6 +1,6 @@
 <html>
 <head>
-  <title>bsparser</title>
+  <title>rawstreamparser</title>
 </head>
 <style type='text/css'>
 * {
@@ -123,6 +123,12 @@ function open(file) {
 
         g_ctx.file_data = evt.target.result;
         g_ctx.file_length = evt.target.result.byteLength;
+
+        //codec2021
+        if (1) {
+          $('#content').append('    input file is:' + file.name + '<br>' + '<br>');
+        }
+
         parse();
       }
     }
