@@ -70,9 +70,12 @@ function add(h) {
     if ('@extra' in h) {
       str += '  ' + h['@extra'];
     }
-  } else if ('@error' in h) {
+  } 
+  else if ('@error' in h) 
+  {
     str = h['@error'];
-  } else {
+  } 
+  else {
     alert('Unknown format of header.');
     return;
   }
@@ -94,18 +97,21 @@ function parse() {
     var buffer = new Uint8Array(g_ctx.file_data.slice(g_ctx.file_pos,
       g_ctx.file_pos + Math.min(1024, g_ctx.file_length - g_ctx.file_pos)));
     g_ctx.file_pos += buffer.length;
+
     g_ctx.parser.parse(buffer);
 
     if (g_ctx.file_pos >= g_ctx.file_length) {
       g_ctx.parser.parse(null);
     }
 
+    var total_frame = 0;
+    //display parse result
     while(1) {
       var h = g_ctx.parser.next();
       if (h==null) break;
-      add(h);
+      add(h); //display
     }
-
+    
     if (g_ctx.num_headers >= g_ctx.max_num_headers)
       break;
   }
@@ -117,18 +123,19 @@ function open(file) {
     return function(evt) {
       if (evt.target.readyState == FileReader.DONE) {
         g_ctx.fmt = file.name.toLowerCase().split('.').pop();
+
         g_ctx.parser = create_parser(g_ctx.fmt);
         if (g_ctx.parser == null)
           return;
 
-        g_ctx.file_data = evt.target.result;
+        g_ctx.file_data   = evt.target.result;
         g_ctx.file_length = evt.target.result.byteLength;
 
-        //codec2021
         if (1) {
           $('#content').append('    input file is:' + file.name + '<br>' + '<br>');
         }
-
+        $('#content').append(padstr('Frame',5,' ', false) + padstr('Offset',10,' ', false) + padstr('Length',10,' ', false) + padstr('Type',25,' ', false) + '<br>' + '<br>');
+        
         parse();
       }
     }
@@ -152,7 +159,7 @@ $(document).scroll(function() {
 });
 
 $(document).ready(function() {
-  var $open = $('<button>', {text: 'Open'});
+  var $open = $('<button>', {text: 'Open Input Stream File'});
   $open.click(function() {
     $('#files').trigger('click');
   });
