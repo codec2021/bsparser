@@ -104,7 +104,6 @@ function parse() {
       g_ctx.parser.parse(null);
     }
 
-    var total_frame = 0;
     //display parse result
     while(1) {
       var h = g_ctx.parser.next();
@@ -124,16 +123,16 @@ function open(file) {
       if (evt.target.readyState == FileReader.DONE) {
         g_ctx.fmt = file.name.toLowerCase().split('.').pop();
 
-        g_ctx.parser = create_parser(g_ctx.fmt);
-        if (g_ctx.parser == null)
-          return;
-
         g_ctx.file_data   = evt.target.result;
         g_ctx.file_length = evt.target.result.byteLength;
 
-        if (1) {
-          $('#content').append('    input file is:' + file.name + '<br>' + '<br>');
+        g_ctx.parser = create_parser(g_ctx.fmt);
+        if (g_ctx.parser == null){
+          $('#content').append('file suffix .' + g_ctx.fmt + ' is not supported,please use .h264/h.265/h.266/.av1/ivf/.vp8/.vp9 as the input file suffix!')
+          return;
         }
+
+        $('#content').append('    input file is:' + file.name + ',  ' + 'file size:' + g_ctx.file_length + 'Byte' + '<br>' + '<br>');
         $('#content').append(padstr('Frame',5,' ', false) + padstr('Offset',10,' ', false) + padstr('Length',10,' ', false) + padstr('Type',25,' ', false) + '<br>' + '<br>');
         
         parse();
