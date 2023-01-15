@@ -44,7 +44,7 @@ function bitstream(buffer) {
   };
 
   this.byte_aligned = function(){
-    return (this.bitpos() == 0 || this.bitpos() == 8);
+    return (this.bitpos() == 0 || (this.bitpos() % 8 == 0));
   }
 
 
@@ -3958,7 +3958,7 @@ bitstream_parser_h266.prototype.parse = function(buffer, addr) {
   }
   h['@length'] = buffer.length;
 
-  console.log('total frame number is:' + this.frame_num)
+  //console.log('total frame number is:' + this.frame_num)
   return h;
 };
 
@@ -4882,8 +4882,12 @@ bitstream_parser_h266.prototype.general_constraints_info = function(bs, idx, h) 
       }
     }
   }
+
+  console.log(bs.bitpos())
   var zero_bits = 8 - bs.bitpos() % 8;
-  h['gci_alignment_zero_bit' + idx] = bs.u(zero_bits);
+  for(var i = 0;i < zero_bits;i++){
+    h['gci_alignment_zero_bit' + idx + i] = bs.u(1);
+  }
 };
 
 
@@ -4901,17 +4905,16 @@ bitstream_parser_h266.prototype.profile_tier_level = function(bs, idx, profilePr
   if (profilePresentFlag){
     this.general_constraints_info(bs,'',h);
   }
-
   var loop = maxNumSubLayersMinus1 - 1;
-  for(var i = loop;i>=0; --i){
+  for(var i = loop;i >= 0; --i){
     h['ptl_sublayer_level_present_flag' + idx + '[' + i + ']'] = bs.u(1);
   }
 
-  //while(!this.byte_aligned()){
-  //  h['ptl_reserved_zero_bit'] = bs.u(1);
-  //}
-  var zero_bits = 8 - bs.bitpos() % 8;
-  h['ptl_reserved_zero_bit'] = bs.u(zero_bits);
+  var idx = 0;
+  while(!bs.byte_aligned()){
+    h['ptl_reserved_zero_bit' + idx] = bs.u(1);
+    idx++;
+  }
   
   for(var i = loop;i>=0; --i){
     if(h['ptl_sublayer_level_present_flag' + idx + '[' + i + ']'])
@@ -5398,12 +5401,12 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
   {
     sps['sps_vui_payload_size_minus1']  = bs.ue();
 
-    var zero_bit = 8 - (bs.bitpos() % 8);
-    //while(!byte_aligned()){
-    //  sps['sps_vui_alignment_zero_bit'] = bs.f(1);
-    //}
-    sps['sps_vui_alignment_zero_bit'] = bs.f(zero_bit);
-
+    var idx = 0;
+    while(!bs.byte_aligned()){
+      sps['sps_vui_alignment_zero_bit' + idx] = bs.u(1);
+      idx++;
+    }
+    
     //vui_payload(sps_vui_payload_size_minus1 + 1) //parseVUI
     var payloadSize = sps['sps_vui_payload_size_minus1'] + 1;
     var VuiExtensionBitsPresentFlag = 0;
@@ -5414,13 +5417,13 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
       if(payload_extension_present(bs)){
         sps['vui_reserved_payload_extension_data'] = bs.u();
       }
-      sps['vui_payload_bit_equal_to_one'] = bs.f(1);
+      sps['vui_payload_bit_equal_to_one'] = bs.u(1);
 
-      //while(!byte_aligned()){
-      //  sps['vui_payload_bit_equal_to_zero'] = bs.f(1);
-      //}
-      var vui_zero_bit = 8 - (bs.bitpos() % 8);
-      sps['vui_payload_bit_equal_to_zero'] = bs.f(vui_zero_bit);
+      var idx = 0;
+      while(!bs.byte_aligned()){
+        sps['vui_payload_bit_equal_to_zero' + idx] = bs.u(1);
+        idx++;
+      }
     }
     if (sps['vui_hrd_parameters_present_flag']){
         this.hrd_parameters(bs, '', 1, sps['sps_max_sub_layers_minus1'], sps);
@@ -5449,6 +5452,12 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
       sps['sps_extension_data_flag[' + i + ']'] = bs.u(1);
   }
   //rbsp_trailing_bits()
+  sps['rbsp_stop_one_bit'] = bs.u(1);
+  var idx = 0;
+  while( !bs.byte_aligned()){
+    sps['rbsp_alignment_zero_bit' + idx] = bs.u(1);
+    idx++;
+  }
 };
 
 
@@ -5694,10 +5703,12 @@ bitstream_parser_h266.prototype.parse_pps = function(bs, pps) {
     pps['pps_extension_data_flag'] = bs.u(1);
   }
   //rbsp_trailing_bits()
-  //pps['rbsp_stop_one_bit'] = bs.u(1);
-  //while(!bs.byte_aligned()){
-  //  pps['rbsp_alignment_zero_bit'] = bs.u(1);
-  //}
+  pps['rbsp_stop_one_bit'] = bs.u(1);
+  var idx = 0;
+  while( !bs.byte_aligned()){
+    pps['rbsp_alignment_zero_bit' + idx] = bs.u(1);
+    idx++;
+  }
 };
 
 
