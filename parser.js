@@ -6432,6 +6432,9 @@ bitstream_parser_h266.prototype.slice_header_segment = function(bs, sh) {
 
   //byte_alignment();
   sh['byte_alignment_bit_equal_to_one'] = bs.u(1);
-  var sh_zero_bit = 8 - (bs.bitpos() % 8);
-  sh['byte_alignment_bit_equal_to_zero'] = bs.u(sh_zero_bit);
+  var idx = 0;
+  while(!bs.byte_aligned()){
+    sh['byte_alignment_bit_equal_to_zero' + idx] = bs.u(1);
+    idx++;
+  }
 };
