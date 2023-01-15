@@ -6,9 +6,9 @@ function create_parser(fmt) {
     return new file_parser_ivf();
   } else if (['264', 'h264', 'avc'].indexOf(fmt) >= 0) {
     return new file_parser_annexb('H264');
-  } else if (['265', 'h265', 'hevc', 'bin'].indexOf(fmt) >= 0) {
+  } else if (['265', 'h265', 'hevc'].indexOf(fmt) >= 0) {
     return new file_parser_annexb('H265');
-  } else if (['266', 'h266', 'bin'].indexOf(fmt) >= 0) {
+  } else if (['266', 'h266','vvc','H266'].indexOf(fmt) >= 0) {
     return new file_parser_annexb('H266');
   }
   return null;
@@ -2391,7 +2391,7 @@ bitstream_parser_h265.prototype.parse = function(buffer, addr) {
     this.parse_vps(bs, h);
   } else if (h['nal_unit_type'] == 33) {
     this.parse_sps(bs, h);
-    h['@extra'] = '            ' + h['pic_width_in_luma_samples'] + 'x' + h['pic_height_in_luma_samples'];
+    h['@extra'] = '        HEVC ' + h['pic_width_in_luma_samples'] + 'x' + h['pic_height_in_luma_samples'];
     h['@extra'] += ' ' + 'profile:' + this.profile(h);
     h['@extra'] += ' ' + 'level_idc:' + h['general_level_idc'];
 
@@ -3896,6 +3896,32 @@ function bitstream_parser_h266() {
   'INVALID'
   ];
 
+  /*
+  enum Name
+  {
+    NONE                                 = 0,
+    INTRA                                = 8,
+    STILL_PICTURE                        = 64,
+    MAIN_10                              = 1,
+    MAIN_10_STILL_PICTURE                = MAIN_10 | STILL_PICTURE,
+    MULTILAYER_MAIN_10                   = 17,
+    MULTILAYER_MAIN_10_STILL_PICTURE     = MULTILAYER_MAIN_10 | STILL_PICTURE,
+    MAIN_10_444                          = 33,
+    MAIN_10_444_STILL_PICTURE            = MAIN_10_444 | STILL_PICTURE,
+    MULTILAYER_MAIN_10_444               = 49,
+    MULTILAYER_MAIN_10_444_STILL_PICTURE = MULTILAYER_MAIN_10_444 | STILL_PICTURE,
+    MAIN_12                              = 2,
+    MAIN_12_444                          = 34,
+    MAIN_16_444                          = 35,
+    MAIN_12_INTRA                        = MAIN_12 | INTRA,
+    MAIN_12_444_INTRA                    = MAIN_12_444 | INTRA,
+    MAIN_16_444_INTRA                    = MAIN_16_444 | INTRA,
+    MAIN_12_STILL_PICTURE                = MAIN_12 | STILL_PICTURE,
+    MAIN_12_444_STILL_PICTURE            = MAIN_12_444 | STILL_PICTURE,
+    MAIN_16_444_STILL_PICTURE            = MAIN_16_444 | STILL_PICTURE,
+  };
+  */
+
   this.frame_num = 0;
   this.SubpicIdVal = [];
 }
@@ -3913,7 +3939,7 @@ bitstream_parser_h266.prototype.parse = function(buffer, addr) {
   else if (h['nal_unit_type'] == 15) //sps
   {
     this.parse_sps(bs, h);
-    h['@extra'] = '            ' + h['sps_pic_width_max_in_luma_samples'] + 'x' + h['sps_pic_height_max_in_luma_samples'];
+    h['@extra'] = '        H.266 ' + h['sps_pic_width_max_in_luma_samples'] + 'x' + h['sps_pic_height_max_in_luma_samples'];
     h['@extra'] += ' ' + 'profile:' + this.profile(h);
     h['@extra'] += ' ' + 'level_idc:' + h['general_level_idc'];
   } 
@@ -3988,15 +4014,15 @@ bitstream_parser_h266.prototype.parse_nalu = function(bs) {
   return nalu;
 };
 
-
+//1:MAIN_10 2:MAIN_12
 bitstream_parser_h266.prototype.profile = function(sps) {
   if (sps['general_profile_idc'] == 1 ||
       sps['general_profile_compatibility_flag[1]'])
-    return 'Main';
+    return 'Main_10';
   if (sps['general_profile_idc'] == 2 ||
       sps['general_profile_compatibility_flag[2]'])
-    return 'Main 10';
-  if (sps['general_profile_idc'] == 3 ||
+    return 'Main 12';
+  if (sps['general_profile_idc'] == 64 ||
       sps['general_profile_compatibility_flag[3]'])
     return 'Main Still Picture';
 };
