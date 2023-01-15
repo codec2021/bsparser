@@ -1,5 +1,5 @@
 # raw bitstream (syntax) parser
-Now support:VP8 / VP9 / AV1 / H264/AVC / H265/HEVC raw bitstream.
+Now support:VP8 / VP9 / AV1 / H264/AVC / H265/HEVC / H.266/VVC raw bitstream.
 
 
 # https://ssilkin.github.io/bsparser/
