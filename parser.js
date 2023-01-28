@@ -1,4 +1,5 @@
 var g_headers = [];
+var prefix = '    '
 
 //exports.create_parser = function(fmt) {
 function create_parser(fmt) {
@@ -267,14 +268,16 @@ file_parser_ivf.prototype.parse = function(buffer) {
       }
       store_header(this.ivf_header);
       this.num_needed_bytes = 12;
-    } else if (this.frame_size == null) {
+    } 
+    else if (this.frame_size == null) {
       this.frame_size = this.num_needed_bytes = (this.buffer[3] << 24) |
           (this.buffer[2] << 16) | (this.buffer[1] << 8) | this.buffer[0];
       this.ts = 0;
       for (var i = 0; i < 8; ++i) {
         this.ts += this.buffer[4 + i] << (i * 8);
       }
-    } else if (this.parser != null) {
+    } 
+    else if (this.parser != null) {
       var h = this.parser.parse(this.buffer.slice(0, this.recv), this.addr);
       if (h != null) {
         h['@ts'] = this.ts;
@@ -324,10 +327,11 @@ file_parser_annexb.prototype = new file_parser_base();
 file_parser_annexb.prototype.parse = function(buffer, addr) {
   if (buffer == null) {
     if (!this.first && this.recv > 0) {
-      this.parser.parse(this.buffer.slice(0, this.recv), this.addr);
+      var cur = this.parser.parse(this.buffer.slice(0, this.recv), this.addr);
       this.code = 0xffffffff;
       this.first = true;
       this.recv = 0;
+      store_header(cur);
     }
   } else {
     var pos = 0;
@@ -352,13 +356,13 @@ file_parser_annexb.prototype.parse = function(buffer, addr) {
       this.code = ((this.code << 8) | byte) & 0x00ffffff;
       if (this.code == 3) {
         cnt3++;
-      } else {
+      } 
+      else {
         this.buffer[this.recv++] = byte;
         if (this.code == 1) {
           this.recv -= 3;
 
           var h = this.parser.parse(this.buffer.slice(0, this.recv), this.addr);
-
           store_header(h);
           this.addr += this.recv + cnt3;
           this.recv = 0;
@@ -1990,9 +1994,9 @@ bitstream_parser_h264.prototype.parse_sps = function(bs, sps) {
     }
     sps['timing_info_present_flag'] = bs.u(1);
     if (sps['timing_info_present_flag']) {
-      sps['num_units_in_tick'] = bs.u(32);
-      sps['time_scale'] = bs.u(32);
-      sps['fixed_frame_rate_flag'] = bs.u(1);
+      sps[prefix + 'num_units_in_tick'] = bs.u(32);
+      sps[prefix + 'time_scale'] = bs.u(32);
+      sps[prefix + 'fixed_frame_rate_flag'] = bs.u(1);
     }
     sps['nal_hrd_parameters_present_flag'] = bs.u(1);
     if (sps['nal_hrd_parameters_present_flag'])
@@ -3924,6 +3928,7 @@ function bitstream_parser_h266() {
 
   this.frame_num = 0;
   this.SubpicIdVal = [];
+  this.ScalingList = [];
 }
 
 //codec2021
@@ -3947,11 +3952,15 @@ bitstream_parser_h266.prototype.parse = function(buffer, addr) {
   {
     this.parse_pps(bs, h);
   } 
-  else if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20, 21].indexOf(h['nal_unit_type']) >= 0) 
+  else if(h['nal_unit_type'] == 17 || h['nal_unit_type'] == 18)
+  {
+    this.adaptation_parameter_set_rbsp(bs,h);
+  }
+  else if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20, 21].indexOf(h['nal_unit_type']) >= 0) 
   {
     this.slice_header_segment(bs, h);
-
     h['@keyframe'] = [7, 8].indexOf(h['nal_unit_type']) >= 0 ? 1 : 0;
+
     if (h['@keyframe']) {
       h['@type'] = 'IDR';
     } else {
@@ -3984,7 +3993,6 @@ bitstream_parser_h266.prototype.parse = function(buffer, addr) {
   }
   h['@length'] = buffer.length;
 
-  //console.log('total frame number is:' + this.frame_num)
   return h;
 };
 
@@ -4147,11 +4155,9 @@ bitstream_parser_h266.prototype.general_constraints_info = function(bs, idx, h) 
       }
     }
   }
-
-  console.log(bs.bitpos())
   var zero_bits = 8 - bs.bitpos() % 8;
   for(var i = 0;i < zero_bits;i++){
-    h['gci_alignment_zero_bit' + idx + i] = bs.u(1);
+    h[prefix + 'gci_alignment_zero_bit' + idx + i] = bs.u(1);
   }
 };
 
@@ -4247,7 +4253,7 @@ bitstream_parser_h266.prototype.ref_pic_list_struct = function(bs, listIdx, rpls
         var numBits = sps['sps_log2_max_pic_order_cnt_lsb_minus4'] + 4;
         //sps[rpls_poc_lsb_lt[1][2][3]]
         sps['rpls_poc_lsb_lt[' + listIdx + '][' + rplsIdx + '][' + j + ']'] = bs.u(numBits);
-        j++;
+        ++j;
       }
     }
     else
@@ -4260,8 +4266,8 @@ bitstream_parser_h266.prototype.ref_pic_list_struct = function(bs, listIdx, rpls
 bitstream_parser_h266.prototype.general_timing_hrd_parameters= function(bs,sps) {
   sps['num_units_in_tick']                    = bs.u(32);
   sps['time_scale']                           = bs.u(32);
-  sps['general_nal_hrd_params_present_flag']  = bs.u(1);
-  sps['general_vcl_hrd_params_present_flag']  = bs.u(1);
+  sps[prefix + 'general_nal_hrd_params_present_flag']  = bs.u(1);
+  sps[prefix + 'general_vcl_hrd_params_present_flag']  = bs.u(1);
 
   if( sps['general_nal_hrd_params_present_flag'] || sps['general_vcl_hrd_params_present_flag']) {
     sps['general_same_pic_timing_in_all_ols_flag']  = bs.u(1);
@@ -4297,13 +4303,22 @@ bitstream_parser_h266.prototype.sublayer_hrd_parameters = function(bs, subLayerI
 
 bitstream_parser_h266.prototype.ols_timing_hrd_parameters = function(bs, firstSubLayer,MaxSubLayersVal, sps) {
   for(var i = firstSubLayer; i <= MaxSubLayersVal; i++ ) {
-    sps['fixed_pic_rate_general_flag[' + i + ']'] = bs.u(1);
+    sps[prefix + 'fixed_pic_rate_general_flag[' + i + ']'] = bs.u(1);
+
+    //When fixed_pic_rate_general_flag[ i ] is equal to 1, the value of fixed_pic_rate_within_cvs_flag[ i ] is inferred to be equal to 1.
     if(!sps['fixed_pic_rate_general_flag[' + i + ']']){
       sps['fixed_pic_rate_within_cvs_flag[' + i + ']'] = bs.u(1);
     }
+    else
+    { 
+      sps['fixed_pic_rate_within_cvs_flag[' + i + ']'] = 1;
+    }
+
     if(sps['fixed_pic_rate_within_cvs_flag[' + i + ']']){
       sps['elemental_duration_in_tc_minus1[' + i + ']'] = bs.ue();
-    }else if((sps['general_nal_hrd_params_present_flag'] || sps['general_vcl_hrd_params_present_flag']) && sps['hrd_cpb_cnt_minus1'] == 0){
+      sps['low_delay_hrd_flag[' + i + ']']              = 0;
+    }
+    else if((sps['general_nal_hrd_params_present_flag'] || sps['general_vcl_hrd_params_present_flag']) && sps['hrd_cpb_cnt_minus1'] == 0){
       sps['low_delay_hrd_flag[' + i + ']'] = bs.u(1);
     }
 
@@ -4510,6 +4525,40 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
   sps['sps_idr_rpl_present_flag']   = bs.u(1);
   sps['sps_rpl1_same_as_rpl0_flag'] = bs.u(1);
 
+  sps['sps_num_ref_pic_lists[' + 0 + ']'] = bs.ue();
+  for (var j = 0; j < sps['sps_num_ref_pic_lists[' + 0 + ']']; j++)
+  {
+    this.ref_pic_list_struct(bs, 0, j, sps);
+  }
+
+  if (sps['sps_rpl1_same_as_rpl0_flag'])
+  {
+    sps['sps_num_ref_pic_lists[' + 1 + ']'] = sps['sps_num_ref_pic_lists[' + 0 + ']'];
+    for (var j = 0; j < sps['sps_num_ref_pic_lists[' + 1 + ']']; j++)
+    {
+      //this->ref_pic_list_structs[1].push_back(this->ref_pic_list_structs[0][j]);
+      sps['num_ref_entries[' + 1 + '][' + j + ']'] = sps['num_ref_entries[' + 0 + '][' + j + ']'];
+      sps['ltrp_in_header_flag[' + 1 + '][' + j + ']'] = sps['ltrp_in_header_flag[' + 0 + '][' + j + ']'];
+
+      for (var k = 0; k < sps['num_ref_entries[' + 1 + '][' + j + ']']; k++)
+      {
+        sps['inter_layer_ref_pic_flag[' + 1 + '][' + j + '][' + k + ']']  =  sps['inter_layer_ref_pic_flag[' + 0 + '][' + j + '][' + k + ']'];
+        sps['st_ref_pic_flag[' + 1 + '][' + j + '][' + k + ']']           =  sps['st_ref_pic_flag[' + 0 + '][' + j + '][' + k + ']'];
+        sps['abs_delta_poc_st[' + 1 + '][' + j + '][' + k + ']']          =  sps['abs_delta_poc_st[' + 0 + '][' + j + '][' + k + ']'];
+        sps['strp_entry_sign_flag[' + 1 + '][' + j + '][' + k + ']']      =  sps['strp_entry_sign_flag[' + 0 + '][' + j + '][' + k + ']'];
+      }
+    }
+  }
+  else
+  {
+    sps['sps_num_ref_pic_lists[' + 1 + ']'] = bs.ue();
+    for (var j = 0; j < sps['sps_num_ref_pic_lists[' + 1 + ']']; j++)
+    {
+      this.ref_pic_list_struct(bs, 1, j, sps);
+    }
+  }
+
+  /*
   var ref_loop = 1;
   if(sps['sps_rpl1_same_as_rpl0_flag']){
     ref_loop = 1;
@@ -4517,14 +4566,14 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
   else{
     ref_loop = 2;
   }
-
-  for( i = 0; i < ref_loop;i++) {
+  for(var i = 0; i < ref_loop;i++) {
     sps['sps_num_ref_pic_lists[' + i + ']'] = bs.ue();
-    for(j = 0; j < sps['sps_num_ref_pic_lists[' + i + ']']; j++){
+    for(var j = 0; j < sps['sps_num_ref_pic_lists[' + i + ']']; j++){
       //7.3.10 Reference picture list structure syntax
       this.ref_pic_list_struct(bs, i, j, sps);
     }
   }
+  */
   
   sps['sps_ref_wraparound_enabled_flag']  = bs.u(1);
   sps['sps_temporal_mvp_enabled_flag']    = bs.u(1);
@@ -4677,19 +4726,34 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
     var VuiExtensionBitsPresentFlag = 0;
     //vui_parameters( payloadSize )
 
-    //auto more_data_in_payload = !(reader.byte_aligned() && reader.nrBytesRead() >= this->payloadSize);
-    if(VuiExtensionBitsPresentFlag || more_rbsp_data(bs)){
-      if(payload_extension_present(bs)){
-        sps['vui_reserved_payload_extension_data'] = bs.u();
+    var payloadSize = sps['sps_vui_payload_size_minus1'] + 1;
+    var more_data_in_payload = !bs.byte_aligned() || this.length != payloadSize;
+    if (more_data_in_payload)
+    {
+      var nrBits = 8 * payloadSize - this.length;
+      for (; nrBits >= 8; nrBits -= 8)
+      {
+        sps['vui_reserved_payload_extension_data_byte'] = bs.u(8);
       }
-      sps['vui_payload_bit_equal_to_one'] = bs.u(1);
 
+      if(nrBits > 1)
+      {
+        sps['vui_reserved_payload_extension_data_byte'] = bs.u(nrBits);
+      }
+      else
+      {
+        console.log('read vui_reserved_payload_extension_data_byte error!!!')
+        return;
+      }
+      
+      sps['vui_payload_bit_equal_to_one'] = bs.u(1);
       var idx = 0;
       while(!bs.byte_aligned()){
         sps['vui_payload_bit_equal_to_zero' + idx] = bs.u(1);
         idx++;
       }
     }
+
     if (sps['vui_hrd_parameters_present_flag']){
         this.hrd_parameters(bs, '', 1, sps['sps_max_sub_layers_minus1'], sps);
     }
@@ -4707,9 +4771,9 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
       if(sps['sps_extended_precision_flag']){
         sps['sps_ts_residual_coding_rice_present_in_sh_flag'] = bs.u(1);
       }
-      sps['sps_rrc_rice_extension_flag'] = bs.u(1);
-      sps['sps_persistent_rice_adaptation_enabled_flag'] = bs.u(1);
-      sps['sps_reverse_last_sig_coeff_enabled_flag'] = bs.u(1);
+      sps['sps_rrc_rice_extension_flag']                  = bs.u(1);
+      sps['sps_persistent_rice_adaptation_enabled_flag']  = bs.u(1);
+      sps['sps_reverse_last_sig_coeff_enabled_flag']      = bs.u(1);
     } 
   }
   if (sps['sps_extension_7bits']) {
@@ -4717,10 +4781,10 @@ bitstream_parser_h266.prototype.parse_sps = function(bs, sps) {
       sps['sps_extension_data_flag[' + i + ']'] = bs.u(1);
   }
   //rbsp_trailing_bits()
-  sps['rbsp_stop_one_bit'] = bs.u(1);
+  sps['sps_rbsp_stop_one_bit'] = bs.u(1);
   var idx = 0;
   while( !bs.byte_aligned()){
-    sps['rbsp_alignment_zero_bit' + idx] = bs.u(1);
+    sps['sps_rbsp_alignment_zero_bit' + idx] = bs.u(1);
     idx++;
   }
 };
@@ -5353,9 +5417,242 @@ bitstream_parser_h266.prototype.picture_header_structure = function(bs,sps,pps,s
   }
 };
 
+bitstream_parser_h266.prototype.lmcs_data = function(bs, aps) {
+  aps['lmcs_min_bin_idx']           = bs.ue();
+  aps['lmcs_delta_max_bin_idx']     = bs.ue();
+  aps['lmcs_delta_cw_prec_minus1']  = bs.ue();
+
+  var LmcsMaxBinIdx = 15 - aps['lmcs_delta_max_bin_idx'];
+  for(var i = aps['lmcs_min_bin_idx']; i <= LmcsMaxBinIdx; i++){
+    var nrBits = aps['lmcs_delta_cw_prec_minus1'] + 1;
+    aps['lmcs_delta_abs_cw[' + i + ']'] = bs.u(nrBits);
+
+    if(aps['lmcs_delta_abs_cw[' + i + ']'] > 0){
+      aps['lmcs_delta_sign_cw_flag[' + i + ']'] = bs.u(1);
+    }
+  }
+  if(aps['aps_chroma_present_flag']) {
+    aps['lmcs_delta_abs_crs'] = bs.u(3);
+
+    if(aps['lmcs_delta_abs_crs'] > 0){
+      aps['lmcs_delta_sign_crs_flag'] = bs.u(1);
+    }
+  }
+};
+
+bitstream_parser_h266.prototype.calcDiagScanOrder = function(bs, aps) {
+  var DiagScanOrder;
+  for (var log2BlockWidth = 0; log2BlockWidth < 4; log2BlockWidth++)
+  {
+    for (var log2BlockHeight = 0; log2BlockHeight < 4; log2BlockHeight++)
+    {
+      DiagScanOrder[log2BlockWidth].push({});
+
+      var blkWidth      = 1 << log2BlockWidth;
+      var blkHeight     = 1 << log2BlockHeight;
+      // 6.5.2 (24)
+      var i             = 0;
+      var x             = 0;
+      var y             = 0;
+      var stopLoop      = 0;
+      while (!stopLoop)
+      {
+        while (y >= 0)
+        {
+          if (x < blkWidth && y < blkHeight)
+          {
+            DiagScanOrder[log2BlockWidth][log2BlockHeight].push({x, y});
+            i++;
+          }
+          y--;
+          x++;
+        }
+        y = x;
+        x = 0;
+        if (i >= blkWidth * blkHeight){
+          stopLoop = true;
+        }
+      }
+    }
+  }
+  return DiagScanOrder;
+};
+
+
+bitstream_parser_h266.prototype.scaling_list_data = function(bs, aps) {
+  var nextCoef = 0;
+  /*
+  //var DiagScanOrder = this.calcDiagScanOrder();
+  for(var id = 0; id < 28; id++) 
+  {
+    var matrixSize = id < 2 ? 2 : (id < 8 ? 4 : 8);
+
+    if(aps['aps_chroma_present_flag'] || id % 3 == 2 || id == 27)
+    {
+      aps['scaling_list_copy_mode_flag[' + id + ']'] = bs.u(1);
+
+      if(!aps['scaling_list_copy_mode_flag[' + id + ']']){
+        aps['scaling_list_pred_mode_flag[' + id + ']'] = bs.u(1);
+      }
+      if((aps['scaling_list_copy_mode_flag[' + id + ']'] || aps['scaling_list_pred_mode_flag[' + id + ']']) && id != 0 && id != 2 && id != 8){
+        aps['scaling_list_pred_id_delta[' + id + ']'] = bs.ue();
+      }
+
+      var threshold = 14;
+      if(!aps['scaling_list_pred_mode_flag[' + id + ']']) 
+      { 
+        nextCoef = 0;
+        
+        if(id > 13) 
+        {
+          var tmp  = id - threshold;
+          aps['scaling_list_dc_coef[' + tmp + ']'] = bs.se();
+          nextCoef += aps['scaling_list_dc_coef[' + tmp + ']'];
+        }
+        for(var i = 0; i < matrixSize * matrixSize; i++) {
+          x = DiagScanOrder[3][3][i][0];
+          y = DiagScanOrder[3][3][i][1];
+
+          if(!(id > 25 && x >= 4 && y >= 4)){
+            aps['scaling_list_delta_coef[' + id + '][' + i + ']'] = bs.se();
+            nextCoef += aps['scaling_list_delta_coef[' + id + '][' + i + ']'];
+          }
+          this.ScalingList[id][i] = nextCoef;
+        }
+      } 
+    }
+  }
+  */
+};
+
+bitstream_parser_h266.prototype.alf_data = function(bs, aps) {
+
+
+  aps['alf_luma_filter_signal_flag']      = bs.u(1);
+  if(aps['aps_chroma_present_flag']){
+    aps['alf_chroma_filter_signal_flag']  = bs.u(1);
+    aps['alf_cc_cb_filter_signal_flag']   = bs.u(1);
+    aps['alf_cc_cr_filter_signal_flag']   = bs.u(1);
+  }
+
+  if(aps['alf_luma_filter_signal_flag']){
+    aps['alf_luma_clip_flag'] = bs.u(1); 
+    aps['alf_luma_num_filters_signalled_minus1'] =bs.ue();
+    if(aps['alf_luma_num_filters_signalled_minus1'] > 0)
+    {
+      var NumAlfFilters = 25;
+      for(var filtIdx = 0; filtIdx < NumAlfFilters; filtIdx++){
+        var nrBits = Math.ceil(Math.log2(aps['alf_luma_num_filters_signalled_minus1'] + 1));
+        aps['alf_luma_coeff_delta_idx[' + filtIdx + ']'] = bs.u(nrBits);
+      }
+    }
+
+    for(var sfIdx = 0; sfIdx <= aps['alf_luma_num_filters_signalled_minus1']; sfIdx++){
+      for(var j = 0; j < 12; j++) 
+      {
+        aps['alf_luma_coeff_abs[ sfIdx' + '][' + j + ']'] = bs.ue(); 
+        if(aps['alf_luma_coeff_abs[ sfIdx' + '][' + j + ']']){
+          aps['alf_luma_coeff_sign[ sfIdx' + '][' + j + ']'] = bs.u(1); 
+        }
+      }
+    }
+
+    if(aps['alf_luma_clip_flag']){
+      for(var sfIdx = 0; sfIdx <= aps['alf_luma_num_filters_signalled_minus1']; sfIdx++){
+        for(var j = 0; j < 12; j++){
+          aps['alf_luma_clip_idx[ sfIdx' + '][' + j + ']'] = bs.u(2);
+        }
+      }
+    }
+  }
+
+  if(aps['alf_chroma_filter_signal_flag']) 
+  {
+    aps['alf_chroma_clip_flag'] = bs.u(1);
+    aps['alf_chroma_num_alt_filters_minus1'] = bs.ue();
+    for(var altIdx = 0; altIdx <= aps['alf_chroma_num_alt_filters_minus1']; altIdx++) 
+    {
+      for(var j = 0; j < 6; j++) {
+        aps['alf_chroma_coeff_abs[' + altIdx + '][' +  j + ']'] = bs.ue(); 
+        if(aps['alf_chroma_coeff_abs[' + altIdx + '][' + j + ']'] > 0){
+          aps['alf_chroma_coeff_sign[' + altIdx + '][' + j + ']'] = bs.u(1);
+        }   
+      }
+
+      if(aps['alf_chroma_clip_flag']){
+        for(var j = 0; j< 6; j++){
+          aps['alf_chroma_clip_idx[' + altIdx + '][' + j + ']'] = bs.u(2);
+        }
+      }   
+    }
+  }
+
+  if(aps['alf_cc_cb_filter_signal_flag']) 
+  {
+    aps['alf_cc_cb_filters_signalled_minus1'] = bs.ue();
+    for(var k = 0; k < aps['alf_cc_cb_filters_signalled_minus1'] + 1; k++) 
+    {
+      for(var j = 0; j < 7; j++) 
+      {
+        aps['alf_cc_cb_mapped_coeff_abs[' + k + '][' + j + ']'] = bs.u(3);
+        if(aps['alf_cc_cb_mapped_coeff_abs[' + k + '][' + j + ']']){
+          aps['alf_cc_cb_coeff_sign[' + k + '][' + j + ']'] = bs.u(1); 
+        }
+      }
+    } 
+  }
+
+  if(aps['alf_cc_cr_filter_signal_flag']) {
+    aps['alf_cc_cr_filters_signalled_minus1'] = bs.ue();
+    for(var k = 0; k < aps['alf_cc_cr_filters_signalled_minus1'] + 1; k++) 
+    {
+      for(var j = 0; j < 7; j++) {
+        aps['alf_cc_cr_mapped_coeff_abs[' + k + '][' + j + ']'] = bs.u(3);
+        if(aps['alf_cc_cr_mapped_coeff_abs[' + k + '][' + j + ']']){
+          aps['alf_cc_cr_coeff_sign[' +  k + '][' + j + ']'] = bs.u(1);
+        }
+      }   
+    } 
+  }
+
+};
+
+bitstream_parser_h266.prototype.adaptation_parameter_set_rbsp = function(bs, aps) {
+  aps['aps_params_type']                  = bs.u(3);
+  aps['aps_adaptation_parameter_set_id']  = bs.u(5);
+  aps['aps_chroma_present_flag']          = bs.u(1);
+
+  //ALF_APS=0,LMCS_APS=1,SCALING_APS=2
+  if(aps['aps_params_type'] == 0){
+    this.alf_data(bs,aps);
+  }
+  else if(aps['aps_params_type'] == 1){
+    this.lmcs_data(bs,aps);
+  }
+  else if( aps['aps_params_type'] == 2){
+    //scaling_list_data();
+  }
+  
+  aps['aps_extension_flag'] = bs.u(1);
+
+  if(aps['aps_extension_flag']){
+    while(more_rbsp_data(bs)){
+      aps['aps_extension_data_flag'] = bs.u(1);
+    }   
+  }
+  //rbsp_trailing_bits();
+  aps['aps_rbsp_stop_one_bit'] = bs.u(1);
+  var idx = 0;
+  while( !bs.byte_aligned()){
+    aps['aps_rbsp_alignment_zero_bit' + idx] = bs.u(1);
+    idx++;
+  }
+};
+
 bitstream_parser_h266.prototype.slice_header_segment = function(bs, sh) {
 
   sh['sh_picture_header_in_slice_header_flag'] = bs.u(1);
+
   if(sh['sh_picture_header_in_slice_header_flag']){
     sh['ph_gdr_or_irap_pic_flag'] = bs.u(1);
     sh['ph_non_ref_pic_flag']     = bs.u(1);
@@ -5392,7 +5689,6 @@ bitstream_parser_h266.prototype.slice_header_segment = function(bs, sh) {
       return sh;
     }
   }
-
   var CurrSubpicIdx = -1;
   if(sps['sps_subpic_info_present_flag']){
     var nrBits = sps['sps_subpic_id_len_minus1'] + 1;
@@ -5515,7 +5811,6 @@ bitstream_parser_h266.prototype.slice_header_segment = function(bs, sh) {
     }
   }
 
- 
   if(sh['ph_lmcs_enabled_flag'] && !sh['sh_picture_header_in_slice_header_flag'])
     sh['sh_lmcs_used_flag'] = bs.u(1);
   if(sh['ph_explicit_scaling_list_enabled_flag'] && !sh['sh_picture_header_in_slice_header_flag']) 
@@ -5594,7 +5889,7 @@ bitstream_parser_h266.prototype.slice_header_segment = function(bs, sh) {
       }
     }
   }
-  
+
   if(sps['sps_dep_quant_enabled_flag']){
     sh['sh_dep_quant_used_flag'] = bs.u(1);
   }
