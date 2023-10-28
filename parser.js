@@ -2324,8 +2324,10 @@ bitstream_parser_h264.prototype.parse_sei = function(bs, h) {
       payload_size += bs.u(8);
     } while (payload_size != 0 && (payload_size % 255) == 0);
 
-    h['payload_type[' + i + ']'] = payload_type;
-    h['payload_size[' + i + ']'] = payload_size;
+    //h['payload_type[' + i + ']'] = payload_type;
+    //h['payload_size[' + i + ']'] = payload_size;
+    h['payload_type'] = payload_type;
+    h['payload_size'] = payload_size;
 
     if (payload_type < this.sei_payload_type.length) {
       h['payload_type[' + i + ']'] += ' ' + this.sei_payload_type[payload_type];
@@ -2384,6 +2386,13 @@ function bitstream_parser_h265() {
     'UNSPEC48',
     'UNSPEC63'
   ];
+
+  this.sei_payload_type = [
+    'buffering_period', 'pic_timing', 'pan_scan_rect', 'filler_payload',
+    'user_data_registered_itu_t_t35', 'user_data_unregistered',
+    'recovery_point', 'dec_ref_pic_marking_repetition'
+  ];
+
   this.frame_num = 0;
 }
 
@@ -2401,6 +2410,8 @@ bitstream_parser_h265.prototype.parse = function(buffer, addr) {
 
   } else if (h['nal_unit_type'] == 34) {
     this.parse_pps(bs, h);
+  } else if (h['nal_unit_type'] == 39) {
+    this.parse_sei(bs, h);
   } else if ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20,
               21].indexOf(h['nal_unit_type']) >= 0) {
     this.slice_segment_header(bs, h);
@@ -3854,9 +3865,32 @@ bitstream_parser_h265.prototype.slice_segment_header = function(bs, sh) {
   }
 };
 
-bitstream_parser_h265.prototype.parse_sei = function(bs) {
-  var seis = {};
-  return seis;
+bitstream_parser_h265.prototype.parse_sei = function(bs, h) {
+  var i = 0;
+  do {
+      var payload_type = 0;
+      do {
+        payload_type += bs.u(8);
+      } while (payload_type != 0 && (payload_type % 255) == 0);
+
+    var payload_size = 0;
+    do {
+      payload_size += bs.u(8);
+    } while (payload_size != 0 && (payload_size % 255) == 0);
+
+    //h['payload_type[' + i + ']'] = payload_type;
+    //h['payload_size[' + i + ']'] = payload_size;
+
+    h['payload_type'] = payload_type;
+    h['payload_size'] = payload_size;
+
+    if (payload_type < this.sei_payload_type.length) {
+      h['payload_type[' + i + ']'] += ' ' + this.sei_payload_type[payload_type];
+    }
+
+    bs.u(8 * payload_size);
+    ++i;
+  } while (more_rbsp_data(bs));
 };
 
 
